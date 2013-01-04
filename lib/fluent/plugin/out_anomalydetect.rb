@@ -7,30 +7,54 @@ module Fluent
 
     config_param :outlier_term, :integer, :default => 28
     config_param :outlier_discount, :float, :default => 0.05
-    config_param :smooth_term, :integer, :default => 3
-    config_param :score_term, :integer, :default => 28
-    config_param :score_discount, :float, :default => 0.05
+    config_param :smooth_term, :integer, :default => 7
+    config_param :score_term, :integer, :default => 14
+    config_param :score_discount, :float, :default => 0.1
     config_param :tick, :integer, :default => 60 * 5
     config_param :tag, :string, :default => "anomaly"
-    config_param :value, :string
+    config_param :target, :string, :default => ""
 
     attr_accessor :outlier
     attr_accessor :score
+    attr_accessor :recordCount
 
     attr_accessor :outliers
-    attr_accessor :scores
 
     attr_accessor :records
 
     def configure (conf)
       super
+      unless 0 < @outlier_discount and @outlier_discount < 1 
+        raise Fluent::ConfigError, "discount ratio should be between (0, 1)" 
+      end
+      unless 0 < @score_discount and @score_discount < 1 
+        raise Fluent::ConfigError, "discount ratio should be between (0, 1)"
+      end
+      if @outlier_term < 1
+        raise Fluent::ConfigError, "outlier term should be greater than 0"
+      end
+      if @score_term < 1
+        raise Fluent::ConfigError, "score term should be greater than 0"
+      end
+      if @smooth_term < 1
+        raise Fluent::ConfigError, "smooth term should be greater than 0"
+      end
+      if @tick < 10
+        raise Fluent::ConfigError, "tick timer should be greater than 10 sec"
+      end
+      
       @outliers = []
-      @scores = []
       @outlier  = ChangeFinder.new(@outlier_term, @outlier_discount)
       @score    = ChangeFinder.new(@score_term, @score_discount)
 
       @records = {}
       @mutex = Mutex.new
+
+      if @target == ""
+        @recordCount = true 
+      else
+        @recordCount = false
+      end
     end
 
     def start
@@ -74,20 +98,30 @@ module Fluent
 
     def flush
       flushed, @records = @records, init_records
-      
-      output = {}
+
+      _output = {}
       flushed.each do |tick, records|
-        output[tick] = records.inject(0.0) do |sum, record| sum += record[@value] if record[@value]; end / records.size
+        if @recordCount
+          _output[tick] = records.size
+        else
+          _output[tick] = records.inject(0.0) do |sum, record| sum += record[@target] if record[@target]; end / records.size
+        end
+      end
+      if _output.keys.size == 0
+        tick = tickTime(Fluent::Engine.now)
+        if @recordCount
+          _output[tick] = 0
+        end
       end
 
-      output.each do |tick, val|
+      output = []
+      _output.each do |tick, val|
         outlier = @outlier.next(val)
         @outliers.push outlier
         @outliers.shift() if @outliers.size > @smooth_term
         score = @score.next(@outliers.inject(0) do |sum, v| sum += v end / @outliers.size)
 
-        output["outlier"] = outlier
-        output["score"] = score
+        output.push({"time" => tick.to_i, "outlier" => outlier, "score" => score, "target" => val})
         # この上の値を出力としてemitする
       end
 
