@@ -39,15 +39,15 @@ module Fluent
       if @smooth_term < 1
         raise Fluent::ConfigError, "smooth term should be greater than 0"
       end
-      if @tick < 10
-        raise Fluent::ConfigError, "tick timer should be greater than 10 sec"
+      if @tick < 1
+        raise Fluent::ConfigError, "tick timer should be greater than 1 sec"
       end
       
       @outliers = []
       @outlier  = ChangeFinder.new(@outlier_term, @outlier_discount)
       @score    = ChangeFinder.new(@score_term, @score_discount)
 
-      @records = {}
+      @records = []
       @mutex = Mutex.new
 
       if @target == ""
@@ -59,8 +59,8 @@ module Fluent
 
     def start
       super
-      start_watch
       init_records
+      start_watch
     end
 
     def shutdown
@@ -76,6 +76,7 @@ module Fluent
     end
 
     def watch
+
       @last_checked = Fluent::Engine.now
       while true
         sleep 0.5
@@ -88,7 +89,7 @@ module Fluent
     end
 
     def init_records
-      @records = {}
+      @records = []
     end
 
     def flush_emit(step)
@@ -99,56 +100,38 @@ module Fluent
     def flush
       flushed, @records = @records, init_records
 
-      _output = {}
-      flushed.each do |tick, records|
-        if @recordCount
-          _output[tick] = records.size
-        else
-          _output[tick] = records.inject(0.0) do |sum, record| sum += record[@target] if record[@target]; end / records.size
-        end
-      end
-      if _output.keys.size == 0
-        tick = tickTime(Fluent::Engine.now)
-        if @recordCount
-          _output[tick] = 0
-        end
+      val = 0
+      if @recordCount
+        val = flushed.size
+      else
+        val = flushed.inject(0.0) do |sum, record| sum += record[@target].to_f if record[@target]; end / flushed.size
       end
 
-      output = []
-      _output.each do |tick, val|
-        outlier = @outlier.next(val)
-        @outliers.push outlier
-        @outliers.shift() if @outliers.size > @smooth_term
-        score = @score.next(@outliers.inject(0) do |sum, v| sum += v end / @outliers.size)
+      outlier = @outlier.next(val)
+      @outliers.push outlier
+      @outliers.shift() if @outliers.size > @smooth_term
+      score = @score.next(@outliers.inject(0) do |sum, v| sum += v end / @outliers.size)
 
-        output.push({"time" => tick.to_i, "outlier" => outlier, "score" => score, "target" => val})
-        # この上の値を出力としてemitする
-      end
+      {"outlier" => outlier, "score" => score, "target" => val}
 
-      output
     end
 
     def tickTime (time)
       (time - time % @tick).to_s
     end
 
-    def pushRecords (tick, records)
+    def pushRecords (records)
       @mutex.synchronize do
-        @records[tick] = [] unless @records[tick]
-        @records[tick].concat(records)
+        @records.concat(records)
       end
     end
 
     def emit (tag, es, chain)
-      times = {}
+      records = []
       es.each do |time, record|
-        tick = tickTime(time)
-        times[tick] = [] unless times[tick]
-        times[tick].push record
+        records.push record
       end
-      times.each do |tick, records|
-        pushRecords tick, records
-      end
+      pushRecords records
 
       chain.next
     end

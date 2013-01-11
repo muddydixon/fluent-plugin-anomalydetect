@@ -1,6 +1,7 @@
 # Fluent::Plugin::Anomalydetect
 
-TODO: Write a gem description
+To detect anomaly for log stream, use this plugin.
+Then you can find changes in logs casually.
 
 ## Installation
 
@@ -18,12 +19,29 @@ Or install it yourself as:
 
 ## Usage
 
-TODO: Write usage instructions here
+```
+<source>
+  type file
+  ...
+  tag access.log
+</source>
 
-## Contributing
+<match access.**>
+  type anomalydetect
+  tag anomaly.access
+  tick 86400
+</match>
 
-1. Fork it
-2. Create your feature branch (`git checkout -b my-new-feature`)
-3. Commit your changes (`git commit -am 'Add some feature'`)
-4. Push to the branch (`git push origin my-new-feature`)
-5. Create new Pull Request
+<match anomaly.access>
+  type file
+  ...
+</match>
+```
+
+Then the plugin output anomaly log counts in each day.
+
+## Theory
+"データマイニングによる異常検知" http://amzn.to/XHXNun
+
+
+

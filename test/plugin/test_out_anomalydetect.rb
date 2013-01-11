@@ -87,7 +87,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
   def test_array_init
     d = create_driver
     assert_equal [], d.instance.outliers
-    assert_equal ({}), d.instance.records
+    assert_equal [], d.instance.records
   end
 
   def test_sdar
@@ -115,8 +115,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
           d.emit({'y' => 1})
         end
         r = d.instance.flush
-        assert r.size > 0
-        assert_equal val, r[0]['target']
+        assert_equal val, r['target']
       end
     end
   end
@@ -131,12 +130,10 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
         break if idx > 5
         d.emit({'y' => row[4].to_i})
         r = d.instance.flush
-        assert r.size > 0
-        assert r[0]['target']
-        assert r[0]['outlier']
-        assert r[0]['score']
+        assert r['target']
+        assert r['outlier']
+        assert r['score']
       end
     end
-
   end
 end
