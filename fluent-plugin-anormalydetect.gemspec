@@ -6,8 +6,8 @@ Gem::Specification.new do |gem|
   gem.version       = 0.0
   gem.authors       = ["Muddy Dixon"]
   gem.email         = ["muddydixon@gmail.com"]
-  gem.description   = %q{hogehoge}
-  gem.summary       = %q{hogehoge}
+  gem.description   = %q{detect anomal sequential input casually}
+  gem.summary       = %q{detect anomal sequential input casually}
   gem.homepage    = "https://github.com/muddydixon/fluent-plugin-anomalydetect"
 
 
