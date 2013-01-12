@@ -38,6 +38,34 @@ Or install it yourself as:
 
 Then the plugin output anomaly log counts in each day.
 
+This plugin watches a value of input record number in the interval set with `tick`.
+
+If you want to watch a value for a target field <fieldname> in data, write below:
+
+    <match access.**>
+      type anomalydetect
+      tag anomaly.access
+      tick 86400
+      target fieldname
+    </match>
+
+== more configuration
+
+    <match access.**>
+      type anomalydetect
+      tag anomaly.access
+      tick 86400
+      target fieldname
+      outlier_term 7
+      outlier_discount 0.5
+      smooth_term 7
+      score_term 28
+      score_discount 0.01
+    </match>
+
+If you want to know detail of these parameters, see "Theory".
+    
+
 == Theory
 "データマイニングによる異常検知" http://amzn.to/XHXNun
 
