@@ -9,8 +9,9 @@ module Fluent
       @data = []
       @mu = 0
       @sigma = 0
-      @c = (0..@term - 1).map do |i| rand end
+      @c = (0..@term - 1).map { |i| rand }
     end
+
     def next(x)
       len = @data.size
 
@@ -19,7 +20,7 @@ module Fluent
 
       # update @c
       c = @sigma
-      for j in 0..@term - 1
+      for j in 0..(@term - 1)
         if @data[len - 1 - j]
           @c[j] = (1 - @r) * @c[j] + @r * (x - @mu) * (@data[len - 1 - j] - @mu) 
         end
@@ -27,7 +28,7 @@ module Fluent
       
       cc = Matrix.zero(@term).to_a
       for j in 0..(@term - 1)
-        for i in j..@term - 1
+        for i in j..(@term - 1)
           cc[j][i] = cc[i][j] = @c[i - j]
         end
       end
@@ -45,13 +46,13 @@ module Fluent
       score(prob xt, @sigma, x)
     end
 
-    def prob (mu, sigma, v)
-      return 0 if sigma == 0
-        
+    def prob(mu, sigma, v)
+      return 0 if sigma.zero?
+
       Math.exp( - 0.5 * (v - mu) ** 2 / sigma) / ((2 * Math::PI) ** 0.5 * sigma ** 0.5)
     end
 
-    def score (p)
+    def score(p)
       return 0 if p <= 0
       -Math.log(p)
     end
@@ -59,10 +60,10 @@ module Fluent
     def smooth(size)
       _end = @data.size
       _begin = [_end - size, 0].max
-      @data.slice(_begin, _end).inject(0.0) do |sum, v| sum += v end / (_end - _begin)
+      @data.slice(_begin, _end).inject(0.0) { |sum, v| sum += v } / (_end - _begin)
     end
 
-    def showStatus
+    def show_status
       {:sigma => @sigma, :mu => @mu, :data => @data, :c => @c}
     end
   end
