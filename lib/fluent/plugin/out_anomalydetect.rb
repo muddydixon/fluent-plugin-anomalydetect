@@ -1,4 +1,3 @@
-# -*- coding: utf-8 -*-
 module Fluent
   class AnomalyDetectOutput < Output
     Fluent::Plugin.register_output('anomalydetect', self)
@@ -12,11 +11,11 @@ module Fluent
     config_param :score_discount, :float, :default => 0.1
     config_param :tick, :integer, :default => 60 * 5
     config_param :tag, :string, :default => "anomaly"
-    config_param :target, :string, :default => ""
+    config_param :target, :string, :default => nil
 
     attr_accessor :outlier
     attr_accessor :score
-    attr_accessor :recordCount
+    attr_accessor :record_count
 
     attr_accessor :outliers
 
@@ -47,14 +46,9 @@ module Fluent
       @outlier  = ChangeFinder.new(@outlier_term, @outlier_discount)
       @score    = ChangeFinder.new(@score_term, @score_discount)
 
-      @records = []
       @mutex = Mutex.new
 
-      if @target == ""
-        @recordCount = true 
-      else
-        @recordCount = false
-      end
+      @record_count = @target.nil?
     end
 
     def start
@@ -78,14 +72,14 @@ module Fluent
     def watch
 
       @last_checked = Fluent::Engine.now
-      while true
+      loop {
         sleep 0.5
-        if Fluent::Engine.now - @last_checked >= @tick
-          now = Fluent::Engine.now
+        now = Fluent::Engine.now
+        if now - @last_checked >= @tick
           flush_emit(now - @last_checked)
           @last_checked = now
         end
-      end
+      }
     end
 
     def init_records
@@ -100,38 +94,34 @@ module Fluent
     def flush
       flushed, @records = @records, init_records
 
-      val = 0
-      if @recordCount
-        val = flushed.size
-      else
-        val = flushed.inject(0.0) do |sum, record| sum += record[@target].to_f if record[@target]; end / flushed.size
-      end
+      val = if @record_count
+              flushed.size
+            else
+              flushed.inject(0.0) { |sum, record| sum += record[@target].to_f if record[@target] } / flushed.size
+            end
 
       outlier = @outlier.next(val)
       @outliers.push outlier
-      @outliers.shift() if @outliers.size > @smooth_term
-      score = @score.next(@outliers.inject(0) do |sum, v| sum += v end / @outliers.size)
+      @outliers.shift if @outliers.size > @smooth_term
+      score = @score.next(@outliers.inject(0) { |sum, v| sum += v } / @outliers.size)
 
       {"outlier" => outlier, "score" => score, "target" => val}
 
     end
 
-    def tickTime (time)
+    def tick_time(time)
       (time - time % @tick).to_s
     end
 
-    def pushRecords (records)
+    def push_records(records)
       @mutex.synchronize do
         @records.concat(records)
       end
     end
 
-    def emit (tag, es, chain)
-      records = []
-      es.each do |time, record|
-        records.push record
-      end
-      pushRecords records
+    def emit(tag, es, chain)
+      records = es.map { |time, record| record }
+      push_records records
 
       chain.next
     end

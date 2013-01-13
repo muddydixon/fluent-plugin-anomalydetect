@@ -28,8 +28,9 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     assert_equal 14, d.instance.score_term
     assert_equal 0.1, d.instance.score_discount
     assert_equal 300, d.instance.tick
-    assert_equal "", d.instance.target
-    assert_equal true, d.instance.recordCount
+    assert_nil d.instance.target
+    assert_equal 'anomaly', d.instance.tag
+    assert d.instance.record_count
 
     d = create_driver
     assert_equal 28, d.instance.outlier_term
@@ -40,7 +41,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     assert_equal 10, d.instance.tick
     assert_equal "y", d.instance.target
     assert_equal 'test.anomaly', d.instance.tag
-    assert_equal false, d.instance.recordCount
+    assert !d.instance.record_count
 
     assert_raise(Fluent::ConfigError) {
       d = create_driver %[
@@ -87,7 +88,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
   def test_array_init
     d = create_driver
     assert_equal [], d.instance.outliers
-    assert_equal [], d.instance.records
+    assert_nil d.instance.records  # @records is initialized at start, not configure
   end
 
   def test_sdar
