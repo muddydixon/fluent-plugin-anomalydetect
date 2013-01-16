@@ -65,6 +65,13 @@ If you want to watch a value for a target field <fieldname> in data, write below
 
 If you want to know detail of these parameters, see "Theory".
     
+    <match access.**>
+      type anomalydetect
+      ...
+      store_file /path/to/anomalydetect.dat
+    </match>
+
+If "store_file" option was specified, a historical stat will be stored to the file at shutdown, and it will be restored on started.
 
 == Theory
 "データマイニングによる異常検知" http://amzn.to/XHXNun
