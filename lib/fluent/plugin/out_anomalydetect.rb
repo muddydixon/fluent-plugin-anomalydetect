@@ -3,6 +3,7 @@ module Fluent
     Fluent::Plugin.register_output('anomalydetect', self)
     
     require 'fluent/plugin/change_finder'
+    require 'pathname'
 
     config_param :outlier_term, :integer, :default => 28
     config_param :outlier_discount, :float, :default => 0.05
@@ -12,6 +13,7 @@ module Fluent
     config_param :tick, :integer, :default => 60 * 5
     config_param :tag, :string, :default => "anomaly"
     config_param :target, :string, :default => nil
+    config_param :store_file, :string, :default => nil
 
     attr_accessor :outlier
     attr_accessor :score
@@ -41,7 +43,12 @@ module Fluent
       if @tick < 1
         raise Fluent::ConfigError, "tick timer should be greater than 1 sec"
       end
-      
+      if @store_file
+        f = Pathname.new(@store_file)
+        if (f.exist? && !f.writable_real?) || (!f.exist? && !f.parent.writable_real?)
+          raise Fluent::ConfigError, "#{@store_file} is not writable"
+        end
+      end
       @outliers = []
       @outlier  = ChangeFinder.new(@outlier_term, @outlier_discount)
       @score    = ChangeFinder.new(@score_term, @score_discount)
@@ -53,6 +60,7 @@ module Fluent
 
     def start
       super
+      load_from_file
       init_records
       start_watch
     end
@@ -62,6 +70,53 @@ module Fluent
       if @watcher
         @watcher.terminate
         @watcher.join
+      end
+      store_to_file
+    end
+
+    def load_from_file
+      return unless @store_file
+      f = Pathname.new(@store_file)
+      return unless f.exist?
+
+      begin
+        f.open('rb') do |f|
+          stored = Marshal.load(f)
+          if (( stored[:outlier_term]     == @outlier_term ) &&
+              ( stored[:outlier_discount] == @outlier_discount ) &&
+              ( stored[:score_term]       == @score_term ) &&
+              ( stored[:score_discount]   == @score_discount ) &&
+              ( stored[:smooth_term]      == @smooth_term ))
+          then
+            @outlier  = stored[:outlier]
+            @outliers = stored[:outliers]
+            @score    = stored[:score]
+          else
+            $log.warn "configuration param was changed. ignore stored data"
+          end
+        end
+      rescue => e
+        $log.warn "Can't load store_file #{e}"
+      end
+    end
+
+    def store_to_file
+      return unless @store_file
+      begin
+        Pathname.new(@store_file).open('wb') do |f|
+          Marshal.dump({
+            :outlier          => @outlier,
+            :outliers         => @outliers,
+            :score            => @score,
+            :outlier_term     => @outlier_term,
+            :outlier_discount => @outlier_discount,
+            :score_term       => @score_term,
+            :score_discount   => @score_discount,
+            :smooth_term      => @smooth_term,
+          }, f)
+        end
+      rescue => e
+        $log.warn "Can't write store_file #{e}"
       end
     end
 
