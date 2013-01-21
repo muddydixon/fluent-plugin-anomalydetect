@@ -137,4 +137,38 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       end
     end
   end
+
+  def test_store_file
+    dir = "test/tmp"
+    Dir.mkdir dir unless Dir.exist? dir
+    file = "#{dir}/test.dat"
+    File.unlink file if File.exist? file
+
+    d = create_driver %[
+      store_file #{file}
+    ]
+
+    d.run do
+      assert_equal [], d.instance.outliers
+      d.emit({'x' => 1})
+      d.emit({'x' => 1})
+      d.emit({'x' => 1})
+      d.instance.flush
+      d.emit({'x' => 1})
+      d.emit({'x' => 1})
+      d.emit({'x' => 1})
+      d.instance.flush
+    end
+    assert File.exist? file
+
+    d2 = create_driver %[
+      store_file #{file}
+    ]
+    d2.run do
+      assert_equal 2, d2.instance.outliers.size
+    end
+
+    File.unlink file
+  end
+
 end
