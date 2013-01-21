@@ -87,7 +87,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
 
   def test_array_init
     d = create_driver
-    assert_equal [], d.instance.outliers
+    assert_equal [], d.instance.outlier_buf
     assert_nil d.instance.records  # @records is initialized at start, not configure
   end
 
@@ -149,7 +149,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     ]
 
     d.run do
-      assert_equal [], d.instance.outliers
+      assert_equal [], d.instance.outlier_buf
       d.emit({'x' => 1})
       d.emit({'x' => 1})
       d.emit({'x' => 1})
@@ -165,7 +165,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       store_file #{file}
     ]
     d2.run do
-      assert_equal 2, d2.instance.outliers.size
+      assert_equal 2, d2.instance.outlier_buf.size
     end
 
     File.unlink file

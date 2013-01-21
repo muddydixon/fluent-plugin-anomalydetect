@@ -19,7 +19,7 @@ module Fluent
     attr_accessor :score
     attr_accessor :record_count
 
-    attr_accessor :outliers
+    attr_accessor :outlier_buf
 
     attr_accessor :records
 
@@ -49,7 +49,7 @@ module Fluent
           raise Fluent::ConfigError, "#{@store_file} is not writable"
         end
       end
-      @outliers = []
+      @outlier_buf = []
       @outlier  = ChangeFinder.new(@outlier_term, @outlier_discount)
       @score    = ChangeFinder.new(@score_term, @score_discount)
 
@@ -89,7 +89,7 @@ module Fluent
               ( stored[:smooth_term]      == @smooth_term ))
           then
             @outlier  = stored[:outlier]
-            @outliers = stored[:outliers]
+            @outlier_buf = stored[:outlier_buf]
             @score    = stored[:score]
           else
             $log.warn "configuration param was changed. ignore stored data"
@@ -106,7 +106,7 @@ module Fluent
         Pathname.new(@store_file).open('wb') do |f|
           Marshal.dump({
             :outlier          => @outlier,
-            :outliers         => @outliers,
+            :outlier_buf         => @outlier_buf,
             :score            => @score,
             :outlier_term     => @outlier_term,
             :outlier_discount => @outlier_discount,
@@ -156,9 +156,9 @@ module Fluent
             end
 
       outlier = @outlier.next(val)
-      @outliers.push outlier
-      @outliers.shift if @outliers.size > @smooth_term
-      score = @score.next(@outliers.inject(0) { |sum, v| sum += v } / @outliers.size)
+      @outlier_buf.push outlier
+      @outlier_buf.shift if @outlier_buf.size > @smooth_term
+      score = @score.next(@outlier_buf.inject(0) { |sum, v| sum += v } / @outlier_buf.size)
 
       {"outlier" => outlier, "score" => score, "target" => val}
 
