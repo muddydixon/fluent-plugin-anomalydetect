@@ -87,7 +87,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
 
   def test_array_init
     d = create_driver
-    assert_equal [], d.instance.outliers
+    assert_equal [], d.instance.outlier_buf
     assert_nil d.instance.records  # @records is initialized at start, not configure
   end
 
@@ -134,6 +134,73 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
         assert r['target']
         assert r['outlier']
         assert r['score']
+      end
+    end
+  end
+
+  def test_store_file
+    dir = "test/tmp"
+    Dir.mkdir dir unless Dir.exist? dir
+    file = "#{dir}/test.dat"
+    File.unlink file if File.exist? file
+
+    d = create_driver %[
+      store_file #{file}
+    ]
+
+    d.run do
+      assert_equal [], d.instance.outlier_buf
+      d.emit({'x' => 1})
+      d.emit({'x' => 1})
+      d.emit({'x' => 1})
+      d.instance.flush
+      d.emit({'x' => 1})
+      d.emit({'x' => 1})
+      d.emit({'x' => 1})
+      d.instance.flush
+    end
+    assert File.exist? file
+
+    d2 = create_driver %[
+      store_file #{file}
+    ]
+    d2.run do
+      assert_equal 2, d2.instance.outlier_buf.size
+    end
+
+    File.unlink file
+  end
+
+  def test_set_large_threshold
+    require 'csv'
+    reader = CSV.open("test/stock.2432.csv", "r")
+    header = reader.take(1)[0]
+    d = create_driver %[
+      threshold 1000
+    ]
+    d.run do 
+      reader.each_with_index do |row, idx|
+        break if idx > 5
+        d.emit({'y' => row[4].to_i})
+        r = d.instance.flush
+        assert_equal nil, r
+      end
+    end
+  end
+
+  def test_set_small_threshold
+    require 'csv'
+    reader = CSV.open("test/stock.2432.csv", "r")
+    header = reader.take(1)[0]
+    d = create_driver %[
+      threshold 1
+    ]
+    d.run do 
+      reader.each_with_index do |row, idx|
+        break if idx > 5
+        d.emit({'y' => row[4].to_i})
+        r = d.instance.flush
+        assert_not_equal nil, r
       end
     end
   end

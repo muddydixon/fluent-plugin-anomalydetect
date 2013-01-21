@@ -3,6 +3,7 @@ module Fluent
     Fluent::Plugin.register_output('anomalydetect', self)
     
     require 'fluent/plugin/change_finder'
+    require 'pathname'
 
     config_param :outlier_term, :integer, :default => 28
     config_param :outlier_discount, :float, :default => 0.05
@@ -12,12 +13,14 @@ module Fluent
     config_param :tick, :integer, :default => 60 * 5
     config_param :tag, :string, :default => "anomaly"
     config_param :target, :string, :default => nil
+    config_param :store_file, :string, :default => nil
+    config_param :threshold, :float, :default => -1.0
 
     attr_accessor :outlier
     attr_accessor :score
     attr_accessor :record_count
 
-    attr_accessor :outliers
+    attr_accessor :outlier_buf
 
     attr_accessor :records
 
@@ -41,8 +44,13 @@ module Fluent
       if @tick < 1
         raise Fluent::ConfigError, "tick timer should be greater than 1 sec"
       end
-      
-      @outliers = []
+      if @store_file
+        f = Pathname.new(@store_file)
+        if (f.exist? && !f.writable_real?) || (!f.exist? && !f.parent.writable_real?)
+          raise Fluent::ConfigError, "#{@store_file} is not writable"
+        end
+      end
+      @outlier_buf = []
       @outlier  = ChangeFinder.new(@outlier_term, @outlier_discount)
       @score    = ChangeFinder.new(@score_term, @score_discount)
 
@@ -53,6 +61,7 @@ module Fluent
 
     def start
       super
+      load_from_file
       init_records
       start_watch
     end
@@ -62,6 +71,53 @@ module Fluent
       if @watcher
         @watcher.terminate
         @watcher.join
+      end
+      store_to_file
+    end
+
+    def load_from_file
+      return unless @store_file
+      f = Pathname.new(@store_file)
+      return unless f.exist?
+
+      begin
+        f.open('rb') do |f|
+          stored = Marshal.load(f)
+          if (( stored[:outlier_term]     == @outlier_term ) &&
+              ( stored[:outlier_discount] == @outlier_discount ) &&
+              ( stored[:score_term]       == @score_term ) &&
+              ( stored[:score_discount]   == @score_discount ) &&
+              ( stored[:smooth_term]      == @smooth_term ))
+          then
+            @outlier  = stored[:outlier]
+            @outlier_buf = stored[:outlier_buf]
+            @score    = stored[:score]
+          else
+            $log.warn "configuration param was changed. ignore stored data"
+          end
+        end
+      rescue => e
+        $log.warn "Can't load store_file #{e}"
+      end
+    end
+
+    def store_to_file
+      return unless @store_file
+      begin
+        Pathname.new(@store_file).open('wb') do |f|
+          Marshal.dump({
+            :outlier          => @outlier,
+            :outlier_buf         => @outlier_buf,
+            :score            => @score,
+            :outlier_term     => @outlier_term,
+            :outlier_discount => @outlier_discount,
+            :score_term       => @score_term,
+            :score_discount   => @score_discount,
+            :smooth_term      => @smooth_term,
+          }, f)
+        end
+      rescue => e
+        $log.warn "Can't write store_file #{e}"
       end
     end
 
@@ -88,7 +144,9 @@ module Fluent
 
     def flush_emit(step)
       output = flush
-      Fluent::Engine.emit(@tag, Fluent::Engine.now, output)
+      if output
+        Fluent::Engine.emit(@tag, Fluent::Engine.now, output)
+      end
     end
 
     def flush
@@ -101,12 +159,15 @@ module Fluent
             end
 
       outlier = @outlier.next(val)
-      @outliers.push outlier
-      @outliers.shift if @outliers.size > @smooth_term
-      score = @score.next(@outliers.inject(0) { |sum, v| sum += v } / @outliers.size)
+      @outlier_buf.push outlier
+      @outlier_buf.shift if @outlier_buf.size > @smooth_term
+      score = @score.next(@outlier_buf.inject(0) { |sum, v| sum += v } / @outlier_buf.size)
 
-      {"outlier" => outlier, "score" => score, "target" => val}
-
+      if @threshold < 0 or (@threshold >= 0 and score > @threshold)
+        {"outlier" => outlier, "score" => score, "target" => val}
+      else
+        nil
+      end
     end
 
     def tick_time(time)
