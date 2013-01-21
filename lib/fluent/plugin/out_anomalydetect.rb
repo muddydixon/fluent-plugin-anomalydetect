@@ -14,6 +14,7 @@ module Fluent
     config_param :tag, :string, :default => "anomaly"
     config_param :target, :string, :default => nil
     config_param :store_file, :string, :default => nil
+    config_param :threshold, :float, :default => -1.0
 
     attr_accessor :outlier
     attr_accessor :score
@@ -143,7 +144,9 @@ module Fluent
 
     def flush_emit(step)
       output = flush
-      Fluent::Engine.emit(@tag, Fluent::Engine.now, output)
+      if output
+        Fluent::Engine.emit(@tag, Fluent::Engine.now, output)
+      end
     end
 
     def flush
@@ -160,8 +163,11 @@ module Fluent
       @outlier_buf.shift if @outlier_buf.size > @smooth_term
       score = @score.next(@outlier_buf.inject(0) { |sum, v| sum += v } / @outlier_buf.size)
 
-      {"outlier" => outlier, "score" => score, "target" => val}
-
+      if @threshold < 0 or (@threshold >= 0 and score > @threshold)
+        {"outlier" => outlier, "score" => score, "target" => val}
+      else
+        nil
+      end
     end
 
     def tick_time(time)

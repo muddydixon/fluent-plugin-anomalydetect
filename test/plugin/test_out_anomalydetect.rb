@@ -171,4 +171,37 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     File.unlink file
   end
 
+  def test_set_large_threshold
+    require 'csv'
+    reader = CSV.open("test/stock.2432.csv", "r")
+    header = reader.take(1)[0]
+    d = create_driver %[
+      threshold 1000
+    ]
+    d.run do 
+      reader.each_with_index do |row, idx|
+        break if idx > 5
+        d.emit({'y' => row[4].to_i})
+        r = d.instance.flush
+        assert_equal nil, r
+      end
+    end
+  end
+
+  def test_set_small_threshold
+    require 'csv'
+    reader = CSV.open("test/stock.2432.csv", "r")
+    header = reader.take(1)[0]
+    d = create_driver %[
+      threshold 1
+    ]
+    d.run do 
+      reader.each_with_index do |row, idx|
+        break if idx > 5
+        d.emit({'y' => row[4].to_i})
+        r = d.instance.flush
+        assert_not_equal nil, r
+      end
+    end
+  end
 end
