@@ -73,6 +73,15 @@ If you want to know detail of these parameters, see "Theory".
 
 If "store_file" option was specified, a historical stat will be stored to the file at shutdown, and it will be restored on started.
 
+
+    <match access.**>
+      type anomalydetect
+      ...
+      threshold 3
+    </match>
+
+If "threshold" option was specified, plugin only ouput when the anomalyscore is more than threshold.
+
 == Theory
 "データマイニングによる異常検知" http://amzn.to/XHXNun
 
