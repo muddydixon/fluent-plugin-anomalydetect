@@ -155,13 +155,18 @@ module Fluent
       val = if @record_count
               flushed.size
             else
-              flushed.inject(0.0) { |sum, record| sum += record[@target].to_f if record[@target] } / flushed.size
+              filtered = flushed.map {|record| record[@target] }.compact
+              return nil if filtered.empty?
+              filtered.inject(:+).to_f / filtered.size
             end
 
       outlier = @outlier.next(val)
+
       @outlier_buf.push outlier
       @outlier_buf.shift if @outlier_buf.size > @smooth_term
-      score = @score.next(@outlier_buf.inject(0) { |sum, v| sum += v } / @outlier_buf.size)
+      outlier_avg = @outlier_buf.empty? ? 0.0 : @outlier_buf.inject(:+).to_f / @outlier_buf.size
+
+      score = @score.next(outlier_avg)
 
       if @threshold < 0 or (@threshold >= 0 and score > @threshold)
         {"outlier" => outlier, "score" => score, "target" => val}
