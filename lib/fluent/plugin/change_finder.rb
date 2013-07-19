@@ -43,7 +43,10 @@ module Fluent
         @data.shift
       end
 
-      score(prob xt, @sigma, x)
+      p = prob(xt, @sigma, x)
+      s = score(p)
+      $log.debug "change_finder:#{Thread.current.object_id} x:#{x} xt:#{xt} p:#{p} s:#{s} term:#{@term} r:#{@r} data:#{@data} mu:#{@mu} sigma:#{@sigma} c:#{@c}"
+      s
     end
 
     def prob(mu, sigma, v)
