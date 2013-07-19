@@ -2,7 +2,7 @@ module Fluent
   class AnomalyDetectOutput < Output
     Fluent::Plugin.register_output('anomalydetect', self)
     
-    require 'fluent/plugin/change_finder'
+    require_relative 'change_finder'
     require 'pathname'
 
     config_param :outlier_term, :integer, :default => 28
