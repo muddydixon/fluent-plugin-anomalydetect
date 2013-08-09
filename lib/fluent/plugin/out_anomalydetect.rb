@@ -170,6 +170,7 @@ module Fluent
       @outlier_buf.shift if @outlier_buf.size > @smooth_term
       score = @score.next(@outlier_buf.inject(0) { |sum, v| sum += v } / @outlier_buf.size)
 
+      $log.debug "out_anomalydetect:#{Thread.current.object_id} flushed:#{flushed} val:#{val} outlier:#{outlier} outlier_buf:#{@outlier_buf} score:#{score}"
       if @threshold < 0 or (@threshold >= 0 and score > @threshold)
         {"outlier" => outlier, "score" => score, "target" => val}
       else
