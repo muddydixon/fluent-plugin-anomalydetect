@@ -63,7 +63,7 @@ module Fluent
     def smooth(size)
       _end = @data.size
       _begin = [_end - size, 0].max
-      @data.slice(_begin, _end).inject(0.0) { |sum, v| sum += v } / (_end - _begin)
+      (_size = (_end - _begin)) == 0 ? 0.0 : @data.slice(_begin, _end).inject(:+).to_f / _size
     end
 
     def show_status
