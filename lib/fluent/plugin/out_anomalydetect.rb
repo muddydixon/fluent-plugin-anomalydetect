@@ -64,6 +64,8 @@ module Fluent
       load_from_file
       init_records
       start_watch
+    rescue => e
+      $log.warn "anomalydetect: #{e.class} #{e.message} #{e.backtrace.first}"
     end
 
     def shutdown
@@ -73,6 +75,8 @@ module Fluent
         @watcher.join
       end
       store_to_file
+    rescue => e
+      $log.warn "anomalydetect: #{e.class} #{e.message} #{e.backtrace.first}"
     end
 
     def load_from_file
@@ -93,11 +97,11 @@ module Fluent
             @outlier_buf = stored[:outlier_buf]
             @score    = stored[:score]
           else
-            $log.warn "configuration param was changed. ignore stored data"
+            $log.warn "anomalydetect: configuration param was changed. ignore stored data"
           end
         end
       rescue => e
-        $log.warn "Can't load store_file #{e}"
+        $log.warn "anomalydetect: Can't load store_file #{e}"
       end
     end
 
@@ -117,7 +121,7 @@ module Fluent
           }, f)
         end
       rescue => e
-        $log.warn "Can't write store_file #{e}"
+        $log.warn "anomalydetect: Can't write store_file #{e}"
       end
     end
 
@@ -126,16 +130,19 @@ module Fluent
     end
 
     def watch
-
       @last_checked = Fluent::Engine.now
-      loop {
-        sleep 0.5
-        now = Fluent::Engine.now
-        if now - @last_checked >= @tick
-          flush_emit(now - @last_checked)
-          @last_checked = now
+      loop do
+        begin
+          sleep 0.5
+          now = Fluent::Engine.now
+          if now - @last_checked >= @tick
+            flush_emit(now - @last_checked)
+            @last_checked = now
+          end
+        rescue => e
+          $log.warn "anomalydetect: #{e.class} #{e.message} #{e.backtrace.first}"
         end
-      }
+      end
     end
 
     def init_records
@@ -185,6 +192,8 @@ module Fluent
       push_records records
 
       chain.next
+    rescue => e
+      $log.warn "anomalydetect: #{e.class} #{e.message} #{e.backtrace.first}"
     end
   end
 end
