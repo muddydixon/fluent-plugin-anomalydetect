@@ -246,4 +246,54 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       end
     end
   end
+
+  def test_up_trend
+    d = create_driver %[
+      target y
+      trend up
+    ]
+
+    # should not output in down trend
+    d.run do
+      d.emit({'y' => 0.0}); d.instance.flush
+      d.emit({'y' => 0.0}); d.instance.flush
+      d.emit({'y' => 0.0}); d.instance.flush
+      d.emit({'y' => -1.0}); r = d.instance.flush
+      assert_equal nil, r
+    end
+
+    # should output in up trend
+    d.run do
+      d.emit({'y' => -1.0}); d.instance.flush
+      d.emit({'y' => -1.0}); d.instance.flush
+      d.emit({'y' => -1.0}); d.instance.flush
+      d.emit({'y' => 0.0}); r = d.instance.flush
+      assert_not_equal nil, r
+    end
+  end
+
+  def test_down_trend
+    d = create_driver %[
+      target y
+      trend down
+    ]
+    # should output in down trend
+    d.run do
+      d.emit({'y' => 0.0}); d.instance.flush
+      d.emit({'y' => 0.0}); d.instance.flush
+      d.emit({'y' => 0.0}); d.instance.flush
+      d.emit({'y' => -1.0}); r = d.instance.flush
+      assert_not_equal nil, r
+    end
+
+    # should not output in up tread
+    d.run do
+      d.emit({'y' => -1.0}); d.instance.flush
+      d.emit({'y' => -1.0}); d.instance.flush
+      d.emit({'y' => -1.0}); d.instance.flush
+      d.emit({'y' => 0.0})
+      r = d.instance.flush
+      assert_equal nil, r
+    end
+  end
 end
