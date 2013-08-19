@@ -2,6 +2,7 @@
 module Fluent
   class ChangeFinder
     require 'matrix'
+    attr_reader :mu
 
     def initialize(term, r)
       @term = term

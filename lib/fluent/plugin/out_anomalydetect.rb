@@ -15,6 +15,16 @@ module Fluent
     config_param :target, :string, :default => nil
     config_param :store_file, :string, :default => nil
     config_param :threshold, :float, :default => -1.0
+    config_param :trend, :default => nil do |val|
+      case val.downcase
+      when 'up'
+        :up
+      when 'down'
+        :down
+      else
+        raise ConfigError, "out_anomaly treand should be 'up' or 'down'"
+      end
+    end
 
     attr_accessor :outlier
     attr_accessor :score
@@ -177,6 +187,12 @@ module Fluent
 
       $log.debug "out_anomalydetect:#{Thread.current.object_id} flushed:#{flushed} val:#{val} outlier:#{outlier} outlier_buf:#{@outlier_buf} score:#{score}"
       if @threshold < 0 or (@threshold >= 0 and score > @threshold)
+        case @trend
+        when :up
+          return nil if val < @outlier.mu
+        when :down
+          return nil if val > @outlier.mu
+        end
         {"outlier" => outlier, "score" => score, "target" => val}
       else
         nil
