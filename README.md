@@ -162,6 +162,9 @@ If "trend" option was specified, plugin only ouput when the input data tends to 
 
     Change the suffix of emitted messages of `targets` option. Default is `` (empty).
 
+- suppress\_tick
+
+    Suppress to emit output messsages during specified seconds after starting up.
 
 ## Theory
 "データマイニングによる異常検知" http://amzn.to/XHXNun

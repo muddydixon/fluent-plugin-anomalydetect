@@ -397,4 +397,21 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       assert_equal 2, thresholds['y']
     end
   end
+
+  def test_suppress_tick
+    d = create_driver %[
+      tick 10
+      suppress_tick 30
+      target y
+    ]
+
+    data = 10.times.map { (rand * 100).to_i } + [0]
+    d.run do
+      data.each do |val|
+        d.emit({'y' => val})
+        r = d.instance.flush[:all]
+        assert_equal nil, r
+      end
+    end
+  end
 end
