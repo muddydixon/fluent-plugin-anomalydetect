@@ -12,6 +12,9 @@ module Fluent
     config_param :score_discount, :float, :default => 0.1
     config_param :tick, :integer, :default => 60 * 5
     config_param :tag, :string, :default => "anomaly"
+    config_param :add_tag_prefix, :string, :default => nil
+    config_param :remove_tag_prefix, :string, :default => nil
+    config_param :aggregate, :string, :default => 'all'
     config_param :target, :string, :default => nil
     config_param :store_file, :string, :default => nil
     config_param :threshold, :float, :default => -1.0
@@ -26,11 +29,11 @@ module Fluent
       end
     end
 
-    attr_accessor :outlier
-    attr_accessor :score
+    attr_accessor :outliers
+    attr_accessor :scores
     attr_accessor :record_count
 
-    attr_accessor :outlier_buf
+    attr_accessor :outlier_bufs
 
     attr_accessor :records
 
@@ -60,19 +63,44 @@ module Fluent
           raise Fluent::ConfigError, "#{@store_file} is not writable"
         end
       end
-      @outlier_buf = []
-      @outlier  = ChangeFinder.new(@outlier_term, @outlier_discount)
-      @score    = ChangeFinder.new(@score_term, @score_discount)
 
-      @mutex = Mutex.new
+      case @aggregate
+      when 'all'
+        raise Fluent::ConfigError, "anomalydetect: `tag` must be specified with aggregate all" if @tag.nil?
+      when 'tag'
+        raise Fluent::ConfigError, "anomalydetect: `add_tag_prefix` must be specified with aggregate tag" if @add_tag_prefix.nil?
+      else
+        raise Fluent::ConfigError, "anomalydetect: aggregate allows tag/all"
+      end
+
+      @tag_prefix = "#{@add_tag_prefix}." if @add_tag_prefix
+      @tag_prefix_match = "#{@remove_tag_prefix}." if @remove_tag_prefix
+      @tag_proc =
+        if @tag_prefix and @tag_prefix_match
+          Proc.new {|tag| "#{@tag_prefix}#{lstrip(tag, @tag_prefix_match)}" }
+        elsif @tag_prefix_match
+          Proc.new {|tag| lstrip(tag, @tag_prefix_match) }
+        elsif @tag_prefix
+          Proc.new {|tag| "#{@tag_prefix}#{tag}" }
+        elsif @tag
+          Proc.new {|tag| @tag }
+        else
+          Proc.new {|tag| tag }
+        end
 
       @record_count = @target.nil?
+
+      @records = {}
+      @outliers = {}
+      @outlier_bufs = {}
+      @scores = {}
+
+      @mutex = Mutex.new
     end
 
     def start
       super
       load_from_file
-      init_records
       start_watch
     rescue => e
       $log.warn "anomalydetect: #{e.class} #{e.message} #{e.backtrace.first}"
@@ -87,52 +115,6 @@ module Fluent
       store_to_file
     rescue => e
       $log.warn "anomalydetect: #{e.class} #{e.message} #{e.backtrace.first}"
-    end
-
-    def load_from_file
-      return unless @store_file
-      f = Pathname.new(@store_file)
-      return unless f.exist?
-
-      begin
-        f.open('rb') do |f|
-          stored = Marshal.load(f)
-          if (( stored[:outlier_term]     == @outlier_term ) &&
-              ( stored[:outlier_discount] == @outlier_discount ) &&
-              ( stored[:score_term]       == @score_term ) &&
-              ( stored[:score_discount]   == @score_discount ) &&
-              ( stored[:smooth_term]      == @smooth_term ))
-          then
-            @outlier  = stored[:outlier]
-            @outlier_buf = stored[:outlier_buf]
-            @score    = stored[:score]
-          else
-            $log.warn "anomalydetect: configuration param was changed. ignore stored data"
-          end
-        end
-      rescue => e
-        $log.warn "anomalydetect: Can't load store_file #{e}"
-      end
-    end
-
-    def store_to_file
-      return unless @store_file
-      begin
-        Pathname.new(@store_file).open('wb') do |f|
-          Marshal.dump({
-            :outlier          => @outlier,
-            :outlier_buf         => @outlier_buf,
-            :score            => @score,
-            :outlier_term     => @outlier_term,
-            :outlier_discount => @outlier_discount,
-            :score_term       => @score_term,
-            :score_discount   => @score_discount,
-            :smooth_term      => @smooth_term,
-          }, f)
-        end
-      rescue => e
-        $log.warn "anomalydetect: Can't write store_file #{e}"
-      end
     end
 
     def start_watch
@@ -155,43 +137,42 @@ module Fluent
       end
     end
 
-    def init_records
-      @records = []
+    def init_records(tags)
+      records = {}
+      tags.each do |tag|
+        records[tag] = []
+      end
+      records
     end
 
     def flush_emit(step)
-      output = flush
-      if output
-        Fluent::Engine.emit(@tag, Fluent::Engine.now, output)
+      outputs = flush
+      outputs.each do |tag, output|
+        emit_tag = @tag_proc.call(tag)
+        Fluent::Engine.emit(emit_tag, Fluent::Engine.now, output)
       end
     end
 
     def flush
-      flushed, @records = @records, init_records
+      flushed_records, @records = @records, init_records(tags = @records.keys)
+      outputs = {}
+      flushed_records.each do |tag, records|
+        output = flush_each(tag, records)
+        outputs[tag] = output if output
+      end
+      outputs
+    end
 
-      val = if @record_count
-              flushed.size
-            else
-              filtered = flushed.map {|record| record[@target] }.compact
-              return nil if filtered.empty?
-              filtered.inject(:+).to_f / filtered.size
-            end
+    def flush_each(tag, records)
+      val = get_value(records)
+      outlier, score = get_score(tag, val) if val
 
-      outlier = @outlier.next(val)
-
-      @outlier_buf.push outlier
-      @outlier_buf.shift if @outlier_buf.size > @smooth_term
-      outlier_avg = @outlier_buf.empty? ? 0.0 : @outlier_buf.inject(:+).to_f / @outlier_buf.size
-
-      score = @score.next(outlier_avg)
-
-      $log.debug "out_anomalydetect:#{Thread.current.object_id} flushed:#{flushed} val:#{val} outlier:#{outlier} outlier_buf:#{@outlier_buf} score:#{score}"
-      if @threshold < 0 or (@threshold >= 0 and score > @threshold)
+      if score and @threshold < 0 or (@threshold >= 0 and score > @threshold)
         case @trend
         when :up
-          return nil if val < @outlier.mu
+          return nil if val < @outliers[tag].mu
         when :down
-          return nil if val > @outlier.mu
+          return nil if val > @outliers[tag].mu
         end
         {"outlier" => outlier, "score" => score, "target" => val}
       else
@@ -199,23 +180,106 @@ module Fluent
       end
     end
 
-    def tick_time(time)
-      (time - time % @tick).to_s
+    def get_value(records)
+      if @record_count
+        records.size.to_f
+      else
+        compacted_records = records.map {|record| record[@target] }.compact
+        return nil if compacted_records.empty?
+        compacted_records.inject(:+).to_f / compacted_records.size
+      end
     end
 
-    def push_records(records)
+    def get_score(tag, val)
+      @outlier_bufs[tag] ||= []
+      @outliers[tag]     ||= ChangeFinder.new(@outlier_term, @outlier_discount)
+      @scores[tag]       ||= ChangeFinder.new(@score_term, @score_discount)
+
+      outlier = @outliers[tag].next(val)
+
+      @outlier_bufs[tag].push outlier
+      @outlier_bufs[tag].shift if @outlier_bufs[tag].size > @smooth_term
+      outlier_avg = @outlier_bufs[tag].empty? ? 0.0 : @outlier_bufs[tag].inject(:+).to_f / @outlier_bufs[tag].size
+
+      score = @scores[tag].next(outlier_avg)
+
+      $log.debug "out_anomalydetect:#{Thread.current.object_id} tag:#{tag} val:#{val} outlier:#{outlier} outlier_buf:#{@outlier_bufs[tag]} score:#{score}"
+
+      [outlier, score]
+    end
+
+    def push_records(tag, records)
       @mutex.synchronize do
-        @records.concat(records)
+        @records[tag] ||= []
+        @records[tag].concat(records)
       end
     end
 
     def emit(tag, es, chain)
       records = es.map { |time, record| record }
-      push_records records
+      if @aggregate == 'all'
+        push_records(:all, records)
+      else
+        push_records(tag, records)
+      end
 
       chain.next
     rescue => e
       $log.warn "anomalydetect: #{e.class} #{e.message} #{e.backtrace.first}"
+    end
+
+    def load_from_file
+      return unless @store_file
+      f = Pathname.new(@store_file)
+      return unless f.exist?
+
+      begin
+        f.open('rb') do |f|
+          stored = Marshal.load(f)
+          if (( stored[:outlier_term]     == @outlier_term ) &&
+              ( stored[:outlier_discount] == @outlier_discount ) &&
+              ( stored[:score_term]       == @score_term ) &&
+              ( stored[:score_discount]   == @score_discount ) &&
+              ( stored[:smooth_term]      == @smooth_term ) &&
+              ( stored[:aggregate]        == @aggregate ))
+          then
+            @outliers     = stored[:outliers]
+            @outlier_bufs = stored[:outlier_bufs]
+            @scores       = stored[:scores]
+          else
+            $log.warn "anomalydetect: configuration param was changed. ignore stored data"
+          end
+        end
+      rescue => e
+        $log.warn "anomalydetect: Can't load store_file #{e}"
+      end
+    end
+
+    def store_to_file
+      return unless @store_file
+      begin
+        Pathname.new(@store_file).open('wb') do |f|
+          Marshal.dump({
+            :outliers         => @outliers,
+            :outlier_bufs     => @outlier_bufs,
+            :scores           => @scores,
+            :outlier_term     => @outlier_term,
+            :outlier_discount => @outlier_discount,
+            :score_term       => @score_term,
+            :score_discount   => @score_discount,
+            :smooth_term      => @smooth_term,
+            :aggregate        => @aggregate,
+          }, f)
+        end
+      rescue => e
+        $log.warn "anomalydetect: Can't write store_file #{e}"
+      end
+    end
+
+    private
+
+    def lstrip(string, substring)
+      string.index(substring) == 0 ? string[substring.size..-1] : string
     end
   end
 end
