@@ -16,8 +16,13 @@ module Fluent
     config_param :remove_tag_prefix, :string, :default => nil
     config_param :aggregate, :string, :default => 'all'
     config_param :target, :string, :default => nil
+    config_param :targets, :string, :default => nil
+    config_param :outlier_suffix, :string, :default => '_outlier'
+    config_param :score_suffix, :string, :default => '_score'
+    config_param :target_suffix, :string, :default => ''
     config_param :store_file, :string, :default => nil
-    config_param :threshold, :float, :default => -1.0
+    config_param :threshold, :float, :default => nil
+    config_param :thresholds, :string, :default => nil
     config_param :trend, :default => nil do |val|
       case val.downcase
       when 'up'
@@ -28,14 +33,6 @@ module Fluent
         raise ConfigError, "out_anomaly treand should be 'up' or 'down'"
       end
     end
-
-    attr_accessor :outliers
-    attr_accessor :scores
-    attr_accessor :record_count
-
-    attr_accessor :outlier_bufs
-
-    attr_accessor :records
 
     def configure (conf)
       super
@@ -88,7 +85,40 @@ module Fluent
           Proc.new {|tag| tag }
         end
 
-      @record_count = @target.nil?
+      if @target and @targets
+        raise Fluent::ConfigError, "anomalydetect: Either of `target` or `targets` can be specified"
+      end
+      if @targets
+        @targets = @targets.split(',')
+      end
+      @output_each_proc =
+        if @targets
+          Proc.new {|outlier, score, val, target| {"#{target}#{@outlier_suffix}" => outlier, "#{target}#{@score_suffix}" => score, "#{target}#{@target_suffix}" => val } }
+        else
+          Proc.new {|outlier, score, val, target| {"outlier" => outlier, "score" => score, "target" => val} }
+        end
+
+      if @threshold and @thresholds
+        raise Fluent::ConfigError, "anomalydetect: Either of `threshold` or `thresholds` can be specified"
+      end
+      if thresholds = @thresholds
+        if @targets.nil?
+          raise Fluent::ConfigError, "anomalydetect: `thresholds` must be specified together with `targets`"
+        end
+        @thresholds = {}
+        thresholds.split(',').map.with_index {|threshold, idx| @thresholds[@targets[idx]]= threshold.to_f }
+        if @thresholds.size != @targets.size
+          raise Fluent::ConfigError, "anomalydetect: The size of `thresholds` must be same with the size of `targets`"
+        end
+      else
+        @threshold = -1.0 if @threshold.nil? # for lower compatibility
+      end
+      @threshold_proc =
+        if @thresholds
+          Proc.new {|target| @threholds[target] }
+        else
+          Proc.new {|target| @threshold }
+        end
 
       @records = {}
       @outliers = {}
@@ -96,6 +126,32 @@ module Fluent
       @scores = {}
 
       @mutex = Mutex.new
+    end
+
+    # for test
+    attr_reader :thresholds
+
+    def outlier_bufs(tag, target = nil)
+      @outlier_bufs[tag] ||= {}
+      @outlier_bufs[tag][target] ||= []
+    end
+
+    def outliers(tag, target = nil)
+      @outliers[tag] ||= {}
+      @outliers[tag][target] ||= ChangeFinder.new(@outlier_term, @outlier_discount)
+    end
+
+    def scores(tag, target = nil)
+      @scores[tag] ||= {}
+      @scores[tag][target] ||= ChangeFinder.new(@score_term, @score_discount)
+    end
+
+    def init_records(tags)
+      records = {}
+      tags.each do |tag|
+        records[tag] = []
+      end
+      records
     end
 
     def start
@@ -137,14 +193,6 @@ module Fluent
       end
     end
 
-    def init_records(tags)
-      records = {}
-      tags.each do |tag|
-        records[tag] = []
-      end
-      records
-    end
-
     def flush_emit(step)
       outputs = flush
       outputs.each do |tag, output|
@@ -157,55 +205,61 @@ module Fluent
       flushed_records, @records = @records, init_records(tags = @records.keys)
       outputs = {}
       flushed_records.each do |tag, records|
-        output = flush_each(tag, records)
+        output =
+          if @targets
+            @targets.each_with_object({}) {|target, output| output.merge!(flush_each(records, tag, target)) }
+          elsif @target
+            flush_each(records, tag, @target)
+          else
+            flush_each(records, tag)
+          end
         outputs[tag] = output if output
       end
       outputs
     end
 
-    def flush_each(tag, records)
-      val = get_value(records)
-      outlier, score = get_score(tag, val) if val
+    def flush_each(records, tag, target = nil)
+      val = get_value(records, target)
+      outlier, score, mu = get_score(val, tag, target) if val
+      threshold = @threshold_proc.call(target)
 
-      if score and @threshold < 0 or (@threshold >= 0 and score > @threshold)
+      if score and threshold < 0 or (threshold >= 0 and score > threshold)
         case @trend
         when :up
-          return nil if val < @outliers[tag].mu
+          return nil if val < mu
         when :down
-          return nil if val > @outliers[tag].mu
+          return nil if val > mu
         end
-        {"outlier" => outlier, "score" => score, "target" => val}
+        @output_each_proc.call(outlier, score, val, target)
       else
         nil
       end
     end
 
-    def get_value(records)
-      if @record_count
-        records.size.to_f
-      else
-        compacted_records = records.map {|record| record[@target] }.compact
+    def get_value(records, target = nil)
+      if target
+        compacted_records = records.map {|record| record[target] }.compact
         return nil if compacted_records.empty?
-        compacted_records.inject(:+).to_f / compacted_records.size
+        compacted_records.inject(:+).to_f / compacted_records.size # average
+      else
+        records.size.to_f # num of records
       end
     end
 
-    def get_score(tag, val)
-      @outlier_bufs[tag] ||= []
-      @outliers[tag]     ||= ChangeFinder.new(@outlier_term, @outlier_discount)
-      @scores[tag]       ||= ChangeFinder.new(@score_term, @score_discount)
+    def get_score(val, tag, target = nil)
+      outlier = outliers(tag, target).next(val)
+      mu = outliers(tag, target).mu
 
-      outlier = @outliers[tag].next(val)
+      outlier_buf = outlier_bufs(tag, target)
+      outlier_buf.push outlier
+      outlier_buf.shift if outlier_buf.size > @smooth_term
+      outlier_avg = outlier_buf.empty? ? 0.0 : outlier_buf.inject(:+).to_f / outlier_buf.size
 
-      @outlier_bufs[tag].push outlier
-      @outlier_bufs[tag].shift if @outlier_bufs[tag].size > @smooth_term
-      outlier_avg = @outlier_bufs[tag].empty? ? 0.0 : @outlier_bufs[tag].inject(:+).to_f / @outlier_bufs[tag].size
+      score = scores(tag, target).next(outlier_avg)
 
-      score = @scores[tag].next(outlier_avg)
+      $log.debug "out_anomalydetect:#{Thread.current.object_id} tag:#{tag} val:#{val} outlier:#{outlier} outlier_buf:#{outlier_buf} score:#{score} mu:#{mu}"
 
-      $log.debug "out_anomalydetect:#{Thread.current.object_id} tag:#{tag} val:#{val} outlier:#{outlier} outlier_buf:#{@outlier_bufs[tag]} score:#{score}"
-
-      [outlier, score]
+      [outlier, score, mu]
     end
 
     def push_records(tag, records)
