@@ -3,7 +3,7 @@ lib = File.expand_path('../lib', __FILE__)
 
 Gem::Specification.new do |gem|
   gem.name          = "fluent-plugin-anomalydetect"
-  gem.version       = "0.1.2"
+  gem.version       = "0.1.3"
   gem.authors       = ["Muddy Dixon"]
   gem.email         = ["muddydixon@gmail.com"]
   gem.description   = %q{detect anomal sequential input casually}
@@ -15,7 +15,7 @@ Gem::Specification.new do |gem|
   gem.executables   = gem.files.grep(%r{^bin/}).map{ |f| File.basename(f) }
   gem.test_files    = gem.files.grep(%r{^(test|spec|features)/})
   gem.require_paths = ["lib"]
-  
+
   gem.add_development_dependency "rake"
   gem.add_development_dependency "pry"
   gem.add_development_dependency "pry-nav"
