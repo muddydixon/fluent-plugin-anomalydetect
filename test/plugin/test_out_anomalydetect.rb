@@ -30,7 +30,6 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     assert_equal 300, d.instance.tick
     assert_nil d.instance.target
     assert_equal 'anomaly', d.instance.tag
-    assert d.instance.record_count
 
     d = create_driver
     assert_equal 28, d.instance.outlier_term
@@ -41,7 +40,6 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     assert_equal 10, d.instance.tick
     assert_equal "y", d.instance.target
     assert_equal 'test.anomaly', d.instance.tag
-    assert !d.instance.record_count
 
     assert_raise(Fluent::ConfigError) {
       d = create_driver %[
@@ -83,18 +81,29 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
         tick 0
       ]
     }
-  end
-
-  def test_array_init
-    d = create_driver
-    assert_equal [], d.instance.outlier_buf
-    assert_nil d.instance.records  # @records is initialized at start, not configure
-  end
-
-  def test_sdar
-    d = create_driver
-    assert_instance_of Fluent::ChangeFinder, d.instance.outlier
-    assert_instance_of Fluent::ChangeFinder, d.instance.score
+    assert_raise(Fluent::ConfigError) {
+      d = create_driver %[
+        target y
+        targets x,y,z
+      ]
+    }
+    assert_raise(Fluent::ConfigError) {
+      d = create_driver %[
+        threshold 1.0
+        thresholds 1.0,2.0
+      ]
+    }
+    assert_raise(Fluent::ConfigError) {
+      d = create_driver %[
+        thresholds 1,2
+      ]
+    }
+    assert_raise(Fluent::ConfigError) {
+      d = create_driver %[
+        targets x,y,z
+        thresholds 1
+      ]
+    }
   end
 
   def test_emit_record_count
@@ -114,7 +123,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
         (0..val - 1).each do ||
           d.emit({'y' => 1})
         end
-        r = d.instance.flush
+        r = d.instance.flush[:all]
         assert_equal val, r['target']
       end
     end
@@ -136,7 +145,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     d.run do
       data.each do |val|
         d.emit({'y' => val})
-        r = d.instance.flush
+        r = d.instance.flush[:all]
         assert_equal val, r['target']
       end
     end
@@ -157,7 +166,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     d.run do
       10.times do
         d.emit({'foobar' => 999.99})
-        r = d.instance.flush
+        r = d.instance.flush[:all]
         assert_equal nil, r
       end
     end
@@ -172,7 +181,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       reader.each_with_index do |row, idx|
         break if idx > 5
         d.emit({'y' => row[4].to_i})
-        r = d.instance.flush
+        r = d.instance.flush[:all]
         assert r['target']
         assert r['outlier']
         assert r['score']
@@ -191,15 +200,15 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     ]
 
     d.run do
-      assert_equal [], d.instance.outlier_buf
+      assert_equal([], d.instance.outlier_bufs(:all))
       d.emit({'x' => 1})
       d.emit({'x' => 1})
       d.emit({'x' => 1})
-      d.instance.flush
+      d.instance.flush[:all]
       d.emit({'x' => 1})
       d.emit({'x' => 1})
       d.emit({'x' => 1})
-      d.instance.flush
+      d.instance.flush[:all]
     end
     assert File.exist? file
 
@@ -207,7 +216,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       store_file #{file}
     ]
     d2.run do
-      assert_equal 2, d2.instance.outlier_buf.size
+      assert_equal 2, d2.instance.outlier_bufs(:all).size
     end
 
     File.unlink file
@@ -224,7 +233,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       reader.each_with_index do |row, idx|
         break if idx > 5
         d.emit({'y' => row[4].to_i})
-        r = d.instance.flush
+        r = d.instance.flush[:all]
         assert_equal nil, r
       end
     end
@@ -241,7 +250,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       reader.each_with_index do |row, idx|
         break if idx > 5
         d.emit({'y' => row[4].to_i})
-        r = d.instance.flush
+        r = d.instance.flush[:all]
         assert_not_equal nil, r
       end
     end
@@ -258,7 +267,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       d.emit({'y' => 0.0}); d.instance.flush
       d.emit({'y' => 0.0}); d.instance.flush
       d.emit({'y' => 0.0}); d.instance.flush
-      d.emit({'y' => -1.0}); r = d.instance.flush
+      d.emit({'y' => -1.0}); r = d.instance.flush[:all]
       assert_equal nil, r
     end
 
@@ -267,7 +276,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       d.emit({'y' => -1.0}); d.instance.flush
       d.emit({'y' => -1.0}); d.instance.flush
       d.emit({'y' => -1.0}); d.instance.flush
-      d.emit({'y' => 0.0}); r = d.instance.flush
+      d.emit({'y' => 0.0}); r = d.instance.flush[:all]
       assert_not_equal nil, r
     end
   end
@@ -282,7 +291,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       d.emit({'y' => 0.0}); d.instance.flush
       d.emit({'y' => 0.0}); d.instance.flush
       d.emit({'y' => 0.0}); d.instance.flush
-      d.emit({'y' => -1.0}); r = d.instance.flush
+      d.emit({'y' => -1.0}); r = d.instance.flush[:all]
       assert_not_equal nil, r
     end
 
@@ -292,8 +301,117 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       d.emit({'y' => -1.0}); d.instance.flush
       d.emit({'y' => -1.0}); d.instance.flush
       d.emit({'y' => 0.0})
-      r = d.instance.flush
+      r = d.instance.flush[:all]
       assert_equal nil, r
+    end
+  end
+
+  def test_aggregate_tag
+    d = create_driver %[
+      outlier_term 28
+      outlier_discount 0.05
+      score_term 28
+      score_discount 0.05
+      tick 10
+      smooth_term 3
+      aggregate tag
+      add_tag_prefix test
+    ]
+
+    data = 10.times.map { (rand * 100).to_i } + [0]
+    d.run do 
+      data.each do |val|
+        (0..val - 1).each do ||
+          d.emit({'y' => 1})
+        end
+        r = d.instance.flush['debug.anomaly']
+        assert_equal val, r['target']
+      end
+    end
+  end
+
+  def test_targets
+    d = create_driver %[
+      targets x,y
+    ]
+    data = 10.times.map { (rand * 100).to_i } + [0]
+    d.run do
+      data.each do |val|
+        d.emit({'x' => val, 'y' => val})
+        r = d.instance.flush[:all]
+        assert_equal val, r['x']
+        assert_equal val, r['y']
+      end
+    end
+  end
+
+  def test_targets_default_suffix
+    d = create_driver %[
+      targets x,y
+    ]
+    data = 1.times.map { (rand * 100).to_i } + [0]
+    d.run do
+      data.each do |val|
+        d.emit({'x' => val, 'y' => val})
+        r = d.instance.flush[:all]
+        assert r.has_key?('x')
+        assert r.has_key?('y')
+        assert r.has_key?('x_outlier')
+        assert r.has_key?('x_score')
+        assert r.has_key?('y_outlier')
+        assert r.has_key?('y_score')
+      end
+    end
+  end
+
+  def test_targets_suffix
+    d = create_driver %[
+      targets x,y
+      outlier_suffix
+      score_suffix _anomaly
+      target_suffix _target
+    ]
+    data = 1.times.map { (rand * 100).to_i } + [0]
+    d.run do
+      data.each do |val|
+        d.emit({'x' => val, 'y' => val})
+        r = d.instance.flush[:all]
+        assert r.has_key?('x_target')
+        assert r.has_key?('y_target')
+        assert r.has_key?('x')
+        assert r.has_key?('x_anomaly')
+        assert r.has_key?('y')
+        assert r.has_key?('y_anomaly')
+      end
+    end
+  end
+
+  def test_targets_thresholds
+    d = create_driver %[
+      targets x,y
+      thresholds 1,2
+    ]
+    d.run do
+      thresholds = d.instance.thresholds
+      assert_equal 1, thresholds['x']
+      assert_equal 2, thresholds['y']
+    end
+  end
+
+  def test_suppress_tick
+    d = create_driver %[
+      tick 10
+      suppress_tick 30
+      target y
+    ]
+
+    data = 10.times.map { (rand * 100).to_i } + [0]
+    d.run do
+      data.each do |val|
+        d.emit({'y' => val})
+        r = d.instance.flush[:all]
+        assert_equal nil, r
+      end
     end
   end
 end
