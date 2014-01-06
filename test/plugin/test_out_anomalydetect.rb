@@ -30,7 +30,6 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     assert_equal 300, d.instance.tick
     assert_nil d.instance.target
     assert_equal 'anomaly', d.instance.tag
-    assert d.instance.record_count
 
     d = create_driver
     assert_equal 28, d.instance.outlier_term
@@ -41,7 +40,6 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     assert_equal 10, d.instance.tick
     assert_equal "y", d.instance.target
     assert_equal 'test.anomaly', d.instance.tag
-    assert !d.instance.record_count
 
     assert_raise(Fluent::ConfigError) {
       d = create_driver %[
@@ -81,6 +79,29 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     assert_raise(Fluent::ConfigError) {
       d = create_driver %[
         tick 0
+      ]
+    }
+    assert_raise(Fluent::ConfigError) {
+      d = create_driver %[
+        target y
+        targets x,y,z
+      ]
+    }
+    assert_raise(Fluent::ConfigError) {
+      d = create_driver %[
+        threshold 1.0
+        thresholds 1.0,2.0
+      ]
+    }
+    assert_raise(Fluent::ConfigError) {
+      d = create_driver %[
+        thresholds 1,2
+      ]
+    }
+    assert_raise(Fluent::ConfigError) {
+      d = create_driver %[
+        targets x,y,z
+        thresholds 1
       ]
     }
   end
@@ -179,7 +200,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     ]
 
     d.run do
-      assert_equal({}, d.instance.outlier_bufs)
+      assert_equal([], d.instance.outlier_bufs(:all))
       d.emit({'x' => 1})
       d.emit({'x' => 1})
       d.emit({'x' => 1})
@@ -195,7 +216,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       store_file #{file}
     ]
     d2.run do
-      assert_equal 2, d2.instance.outlier_bufs[:all].size
+      assert_equal 2, d2.instance.outlier_bufs(:all).size
     end
 
     File.unlink file
@@ -306,6 +327,78 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
         r = d.instance.flush['debug.anomaly']
         assert_equal val, r['target']
       end
+    end
+  end
+
+  def test_targets
+    d = create_driver %[
+      targets x,y
+    ]
+    data = 10.times.map { (rand * 100).to_i } + [0]
+    d.run do
+      data.each do |val|
+        d.emit({'x' => val, 'y' => val})
+        r = d.instance.flush[:all]
+        assert_equal val, r['x']
+        assert_equal val, r['y']
+      end
+    end
+  end
+
+  def test_targets_default_suffix
+    d = create_driver %[
+      targets x,y
+    ]
+    data = 1.times.map { (rand * 100).to_i } + [0]
+    d.run do
+      data.each do |val|
+        d.emit({'x' => val, 'y' => val})
+        r = d.instance.flush[:all]
+        assert r.has_key?('x')
+        assert r.has_key?('y')
+        assert r.has_key?('x_outlier')
+        assert r.has_key?('x_score')
+        assert r.has_key?('y_outlier')
+        assert r.has_key?('y_score')
+      end
+    end
+  end
+
+  def test_targets_suffix
+    d = create_driver %[
+      targets x,y
+      outlier_suffix
+      score_suffix _anomaly
+      target_suffix _target
+    ]
+    data = 1.times.map { (rand * 100).to_i } + [0]
+    d.run do
+      data.each do |val|
+        d.emit({'x' => val, 'y' => val})
+        r = d.instance.flush[:all]
+        assert r.has_key?('x_target')
+        assert r.has_key?('y_target')
+        assert r.has_key?('x')
+        assert r.has_key?('x_anomaly')
+        assert r.has_key?('y')
+        assert r.has_key?('y_anomaly')
+      end
+    end
+  end
+
+  def test_targets_thresholds
+    d = create_driver %[
+      targets x,y
+      thresholds 1,2
+    ]
+    d.run do
+      thresholds = d.instance.thresholds
+      assert_equal 1, thresholds['x']
+      assert_equal 2, thresholds['y']
+
+      threshold_proc = d.instance.threshold_proc
+      assert_equal 1, threshold_proc.call('x')
+      assert_equal 2, threshold_proc.call('y')
     end
   end
 end
