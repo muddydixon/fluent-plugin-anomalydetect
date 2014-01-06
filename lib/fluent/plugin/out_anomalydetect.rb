@@ -115,7 +115,7 @@ module Fluent
       end
       @threshold_proc =
         if @thresholds
-          Proc.new {|target| @threholds[target] }
+          Proc.new {|target| @thresholds[target] }
         else
           Proc.new {|target| @threshold }
         end
@@ -130,6 +130,7 @@ module Fluent
 
     # for test
     attr_reader :thresholds
+    attr_reader :threshold_proc
 
     def outlier_bufs(tag, target = nil)
       @outlier_bufs[tag] ||= {}

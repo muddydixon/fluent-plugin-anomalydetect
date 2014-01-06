@@ -395,6 +395,10 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       thresholds = d.instance.thresholds
       assert_equal 1, thresholds['x']
       assert_equal 2, thresholds['y']
+
+      threshold_proc = d.instance.threshold_proc
+      assert_equal 1, threshold_proc.call('x')
+      assert_equal 2, threshold_proc.call('y')
     end
   end
 end
