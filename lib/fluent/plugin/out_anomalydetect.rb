@@ -1,7 +1,7 @@
 module Fluent
   class AnomalyDetectOutput < Output
     Fluent::Plugin.register_output('anomalydetect', self)
-    
+
     require_relative 'change_finder'
     require 'pathname'
 
@@ -25,7 +25,7 @@ module Fluent
       when 'down'
         :down
       else
-        raise ConfigError, "out_anomaly treand should be 'up' or 'down'"
+        raise ConfigError, "out_anomaly trend should be 'up' or 'down'"
       end
     end
 
@@ -39,10 +39,10 @@ module Fluent
 
     def configure (conf)
       super
-      unless 0 < @outlier_discount and @outlier_discount < 1 
-        raise Fluent::ConfigError, "discount ratio should be between (0, 1)" 
+      unless 0 < @outlier_discount and @outlier_discount < 1
+        raise Fluent::ConfigError, "discount ratio should be between (0, 1)"
       end
-      unless 0 < @score_discount and @score_discount < 1 
+      unless 0 < @score_discount and @score_discount < 1
         raise Fluent::ConfigError, "discount ratio should be between (0, 1)"
       end
       if @outlier_term < 1
