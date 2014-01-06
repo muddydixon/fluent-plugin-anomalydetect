@@ -85,18 +85,6 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     }
   end
 
-  def test_array_init
-    d = create_driver
-    assert_equal [], d.instance.outlier_buf
-    assert_nil d.instance.records  # @records is initialized at start, not configure
-  end
-
-  def test_sdar
-    d = create_driver
-    assert_instance_of Fluent::ChangeFinder, d.instance.outlier
-    assert_instance_of Fluent::ChangeFinder, d.instance.score
-  end
-
   def test_emit_record_count
     d = create_driver %[
       tag test.anomaly
@@ -114,7 +102,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
         (0..val - 1).each do ||
           d.emit({'y' => 1})
         end
-        r = d.instance.flush
+        r = d.instance.flush[:all]
         assert_equal val, r['target']
       end
     end
@@ -136,7 +124,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     d.run do
       data.each do |val|
         d.emit({'y' => val})
-        r = d.instance.flush
+        r = d.instance.flush[:all]
         assert_equal val, r['target']
       end
     end
@@ -157,7 +145,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     d.run do
       10.times do
         d.emit({'foobar' => 999.99})
-        r = d.instance.flush
+        r = d.instance.flush[:all]
         assert_equal nil, r
       end
     end
@@ -172,7 +160,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       reader.each_with_index do |row, idx|
         break if idx > 5
         d.emit({'y' => row[4].to_i})
-        r = d.instance.flush
+        r = d.instance.flush[:all]
         assert r['target']
         assert r['outlier']
         assert r['score']
@@ -191,15 +179,15 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     ]
 
     d.run do
-      assert_equal [], d.instance.outlier_buf
+      assert_equal({}, d.instance.outlier_bufs)
       d.emit({'x' => 1})
       d.emit({'x' => 1})
       d.emit({'x' => 1})
-      d.instance.flush
+      d.instance.flush[:all]
       d.emit({'x' => 1})
       d.emit({'x' => 1})
       d.emit({'x' => 1})
-      d.instance.flush
+      d.instance.flush[:all]
     end
     assert File.exist? file
 
@@ -207,7 +195,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       store_file #{file}
     ]
     d2.run do
-      assert_equal 2, d2.instance.outlier_buf.size
+      assert_equal 2, d2.instance.outlier_bufs[:all].size
     end
 
     File.unlink file
@@ -224,7 +212,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       reader.each_with_index do |row, idx|
         break if idx > 5
         d.emit({'y' => row[4].to_i})
-        r = d.instance.flush
+        r = d.instance.flush[:all]
         assert_equal nil, r
       end
     end
@@ -241,7 +229,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       reader.each_with_index do |row, idx|
         break if idx > 5
         d.emit({'y' => row[4].to_i})
-        r = d.instance.flush
+        r = d.instance.flush[:all]
         assert_not_equal nil, r
       end
     end
@@ -258,7 +246,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       d.emit({'y' => 0.0}); d.instance.flush
       d.emit({'y' => 0.0}); d.instance.flush
       d.emit({'y' => 0.0}); d.instance.flush
-      d.emit({'y' => -1.0}); r = d.instance.flush
+      d.emit({'y' => -1.0}); r = d.instance.flush[:all]
       assert_equal nil, r
     end
 
@@ -267,7 +255,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       d.emit({'y' => -1.0}); d.instance.flush
       d.emit({'y' => -1.0}); d.instance.flush
       d.emit({'y' => -1.0}); d.instance.flush
-      d.emit({'y' => 0.0}); r = d.instance.flush
+      d.emit({'y' => 0.0}); r = d.instance.flush[:all]
       assert_not_equal nil, r
     end
   end
@@ -282,7 +270,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       d.emit({'y' => 0.0}); d.instance.flush
       d.emit({'y' => 0.0}); d.instance.flush
       d.emit({'y' => 0.0}); d.instance.flush
-      d.emit({'y' => -1.0}); r = d.instance.flush
+      d.emit({'y' => -1.0}); r = d.instance.flush[:all]
       assert_not_equal nil, r
     end
 
@@ -292,8 +280,32 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       d.emit({'y' => -1.0}); d.instance.flush
       d.emit({'y' => -1.0}); d.instance.flush
       d.emit({'y' => 0.0})
-      r = d.instance.flush
+      r = d.instance.flush[:all]
       assert_equal nil, r
+    end
+  end
+
+  def test_aggregate_tag
+    d = create_driver %[
+      outlier_term 28
+      outlier_discount 0.05
+      score_term 28
+      score_discount 0.05
+      tick 10
+      smooth_term 3
+      aggregate tag
+      add_tag_prefix test
+    ]
+
+    data = 10.times.map { (rand * 100).to_i } + [0]
+    d.run do 
+      data.each do |val|
+        (0..val - 1).each do ||
+          d.emit({'y' => 1})
+        end
+        r = d.instance.flush['debug.anomaly']
+        assert_equal val, r['target']
+      end
     end
   end
 end
