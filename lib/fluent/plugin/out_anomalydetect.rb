@@ -11,6 +11,7 @@ module Fluent
     config_param :score_term, :integer, :default => 14
     config_param :score_discount, :float, :default => 0.1
     config_param :tick, :integer, :default => 60 * 5
+    config_param :suppress_tick, :integer, :default => 0
     config_param :tag, :string, :default => "anomaly"
     config_param :add_tag_prefix, :string, :default => nil
     config_param :remove_tag_prefix, :string, :default => nil
@@ -53,6 +54,9 @@ module Fluent
       end
       if @tick < 1
         raise Fluent::ConfigError, "tick timer should be greater than 1 sec"
+      end
+      if @suppress_tick < 0
+        raise Fluent::ConfigError, "`suppress_tick` must be greater or equal to 0 sec"
       end
       if @store_file
         f = Pathname.new(@store_file)
@@ -179,11 +183,15 @@ module Fluent
     end
 
     def watch
-      @last_checked = Fluent::Engine.now
+      @started = @last_checked = Fluent::Engine.now
+      @suppress = true
       loop do
         begin
           sleep 0.5
           now = Fluent::Engine.now
+          if @suppress and (now - @started >= @suppress_tick)
+            @suppress = false
+          end
           if now - @last_checked >= @tick
             flush_emit(now - @last_checked)
             @last_checked = now
@@ -198,7 +206,7 @@ module Fluent
       outputs = flush
       outputs.each do |tag, output|
         emit_tag = @tag_proc.call(tag)
-        Fluent::Engine.emit(emit_tag, Fluent::Engine.now, output)
+        Fluent::Engine.emit(emit_tag, Fluent::Engine.now, output) if output and !output.empty?
       end
     end
 
@@ -208,7 +216,10 @@ module Fluent
       flushed_records.each do |tag, records|
         output =
           if @targets
-            @targets.each_with_object({}) {|target, output| output.merge!(flush_each(records, tag, target)) }
+            @targets.each_with_object({}) do |target, output|
+              output_each = flush_each(records, tag, target)
+              output.merge!(output_each) if output_each
+            end
           elsif @target
             flush_each(records, tag, @target)
           else
@@ -224,6 +235,7 @@ module Fluent
       outlier, score, mu = get_score(val, tag, target) if val
       threshold = @threshold_proc.call(target)
 
+      return nil if @suppress
       if score and threshold < 0 or (threshold >= 0 and score > threshold)
         case @trend
         when :up

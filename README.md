@@ -49,7 +49,7 @@ If you want to watch a value for a target field <fieldname> in data, write below
       target fieldname
     </match>
 
-== more configuration
+## more configuration
 
     <match access.**>
       type anomalydetect
@@ -64,7 +64,7 @@ If you want to watch a value for a target field <fieldname> in data, write below
     </match>
 
 If you want to know detail of these parameters, see "Theory".
-    
+
     <match access.**>
       type anomalydetect
       ...
@@ -88,7 +88,7 @@ If "threshold" option was specified, plugin only ouput when the anomalyscore is 
       trend up
     </match>
 
-If "trend" option was specified, plugin only ouput when the input data tends to up (or down). 
+If "trend" option was specified, plugin only ouput when the input data tends to up (or down).
 
 ## Parameters
 
@@ -108,18 +108,18 @@ If "trend" option was specified, plugin only ouput when the input data tends to 
 
 - tag
 
-    The output tag name. Required for aggregate `all`. Default is `anomaly`. 
+    The output tag name. Required for aggregate `all`. Default is `anomaly`.
 
 - add_tag_prefix
 
-    Add tag prefix for output message. Required for aggregate `tag`. 
+    Add tag prefix for output message. Required for aggregate `tag`.
 
 - remove_tag_prefix
 
-    Remove tag prefix for output message. 
+    Remove tag prefix for output message.
 
 - aggragate
-    
+
     Process data for each `tag` or `all`. The default is `all`.
 
 - target
@@ -130,7 +130,7 @@ If "trend" option was specified, plugin only ouput when the input data tends to 
 
 - threshold
 
-    Emit message only if the score is greater than the threshold. Default is `-1.0`. 
+    Emit message only if the score is greater than the threshold. Default is `-1.0`.
 
 - trend
 
@@ -143,7 +143,7 @@ If "trend" option was specified, plugin only ouput when the input data tends to 
 - targets
 
     Watch target fields in data. Specify by comma separated value like `x,y`. The output messsages would be like:
-    
+
         {"x_outlier":1.783,"x_score":4.092,"x":10,"y_outlier":2.310,"y_score":3.982,"y":3}
 
 - thresholds
@@ -152,15 +152,19 @@ If "trend" option was specified, plugin only ouput when the input data tends to 
 
 - outlier\_suffix
 
-    Change the suffix of emitted messages of `targets` option. Default is `_outlier`. 
+    Change the suffix of emitted messages of `targets` option. Default is `_outlier`.
 
 - score\_suffix
 
-    Change the suffix of emitted messages of `targets` option. Default is `_score`. 
+    Change the suffix of emitted messages of `targets` option. Default is `_score`.
 
 - target\_suffix
 
     Change the suffix of emitted messages of `targets` option. Default is `` (empty).
+
+- suppress\_tick
+
+    Suppress to emit output messsages during specified seconds after starting up.
 
 
 ## Theory

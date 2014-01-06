@@ -15,7 +15,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     smooth_term 3
     target y
   ]
-  
+
   def create_driver (conf=CONFIG, tag="debug.anomaly")
     Fluent::Test::OutputTestDriver.new(Fluent::AnomalyDetectOutput, tag).configure(conf)
   end
@@ -118,7 +118,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     ]
 
     data = 10.times.map { (rand * 100).to_i } + [0]
-    d.run do 
+    d.run do
       data.each do |val|
         (0..val - 1).each do ||
           d.emit({'y' => 1})
@@ -177,7 +177,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     reader = CSV.open("test/stock.2432.csv", "r")
     header = reader.take(1)[0]
     d = create_driver
-    d.run do 
+    d.run do
       reader.each_with_index do |row, idx|
         break if idx > 5
         d.emit({'y' => row[4].to_i})
@@ -229,7 +229,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     d = create_driver %[
       threshold 1000
     ]
-    d.run do 
+    d.run do
       reader.each_with_index do |row, idx|
         break if idx > 5
         d.emit({'y' => row[4].to_i})
@@ -246,7 +246,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     d = create_driver %[
       threshold 1
     ]
-    d.run do 
+    d.run do
       reader.each_with_index do |row, idx|
         break if idx > 5
         d.emit({'y' => row[4].to_i})
@@ -319,7 +319,7 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
     ]
 
     data = 10.times.map { (rand * 100).to_i } + [0]
-    d.run do 
+    d.run do
       data.each do |val|
         (0..val - 1).each do ||
           d.emit({'y' => 1})
@@ -399,6 +399,23 @@ class AnomalyDetectOutputTest < Test::Unit::TestCase
       threshold_proc = d.instance.threshold_proc
       assert_equal 1, threshold_proc.call('x')
       assert_equal 2, threshold_proc.call('y')
+    end
+  end
+
+  def test_suppress_tick
+    d = create_driver %[
+      tick 10
+      suppress_tick 30
+      target y
+    ]
+
+    data = 10.times.map { (rand * 100).to_i } + [0]
+    d.run do
+      data.each do |val|
+        d.emit({'y' => val})
+        r = d.instance.flush[:all]
+        assert_equal nil, r
+      end
     end
   end
 end
