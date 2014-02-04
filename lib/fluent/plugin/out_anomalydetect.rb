@@ -164,7 +164,7 @@ module Fluent
       load_from_file
       start_watch
     rescue => e
-      $log.warn "anomalydetect: #{e.class} #{e.message} #{e.backtrace.first}"
+      log.warn "anomalydetect: #{e.class} #{e.message} #{e.backtrace.first}"
     end
 
     def shutdown
@@ -175,7 +175,7 @@ module Fluent
       end
       store_to_file
     rescue => e
-      $log.warn "anomalydetect: #{e.class} #{e.message} #{e.backtrace.first}"
+      log.warn "anomalydetect: #{e.class} #{e.message} #{e.backtrace.first}"
     end
 
     def start_watch
@@ -197,7 +197,7 @@ module Fluent
             @last_checked = now
           end
         rescue => e
-          $log.warn "anomalydetect: #{e.class} #{e.message} #{e.backtrace.first}"
+          log.warn "anomalydetect: #{e.class} #{e.message} #{e.backtrace.first}"
         end
       end
     end
@@ -270,7 +270,7 @@ module Fluent
 
       score = scores(tag, target).next(outlier_avg)
 
-      $log.debug "out_anomalydetect:#{Thread.current.object_id} tag:#{tag} val:#{val} outlier:#{outlier} outlier_buf:#{outlier_buf} score:#{score} mu:#{mu}"
+      log.debug "out_anomalydetect:#{Thread.current.object_id} tag:#{tag} val:#{val} outlier:#{outlier} outlier_buf:#{outlier_buf} score:#{score} mu:#{mu}"
 
       [outlier, score, mu]
     end
@@ -292,7 +292,7 @@ module Fluent
 
       chain.next
     rescue => e
-      $log.warn "anomalydetect: #{e.class} #{e.message} #{e.backtrace.first}"
+      log.warn "anomalydetect: #{e.class} #{e.message} #{e.backtrace.first}"
     end
 
     def load_from_file
@@ -314,11 +314,11 @@ module Fluent
             @outlier_bufs = stored[:outlier_bufs]
             @scores       = stored[:scores]
           else
-            $log.warn "anomalydetect: configuration param was changed. ignore stored data"
+            log.warn "anomalydetect: configuration param was changed. ignore stored data"
           end
         end
       rescue => e
-        $log.warn "anomalydetect: Can't load store_file #{e}"
+        log.warn "anomalydetect: Can't load store_file #{e}"
       end
     end
 
@@ -339,7 +339,7 @@ module Fluent
           }, f)
         end
       rescue => e
-        $log.warn "anomalydetect: Can't write store_file #{e}"
+        log.warn "anomalydetect: Can't write store_file #{e}"
       end
     end
 
