@@ -1,5 +1,5 @@
 require "bundler/gem_tasks"
-
+require "octorelease"
 require 'rake/testtask'
 Rake::TestTask.new(:test) do |test|
   test.libs << 'lib' << 'test'

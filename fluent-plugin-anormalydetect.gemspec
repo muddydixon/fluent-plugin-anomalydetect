@@ -3,7 +3,7 @@ lib = File.expand_path('../lib', __FILE__)
 
 Gem::Specification.new do |gem|
   gem.name          = "fluent-plugin-anomalydetect"
-  gem.version       = "0.1.4"
+  gem.version       = "0.1.5"
   gem.authors       = ["Muddy Dixon"]
   gem.email         = ["muddydixon@gmail.com"]
   gem.description   = %q{detect anomal sequential input casually}
