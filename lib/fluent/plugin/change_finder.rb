@@ -1,21 +1,39 @@
 # -*- coding: utf-8 -*-
 module Fluent
   class ChangeFinder
-    # To support log_level option implemented by Fluentd v0.10.43
-    unless method_defined?(:log)
-      define_method("log") { $log }
-    end
-
     require 'matrix'
+    require 'ostruct'
     attr_reader :mu
+    attr_accessor :log
 
-    def initialize(term, r)
+    def initialize(log, term, r)
+      @log = log
       @term = term
       @r = r
       @data = []
       @mu = 0
       @sigma = 0
       @c = (0..@term - 1).map { |i| rand }
+    end
+
+    def marshal_dump
+      struct = OpenStruct.new
+      struct.term = @term
+      struct.r = @r
+      struct.data = @data
+      struct.mu = @mu
+      struct.sigma = @sigma
+      struct.c = @c
+      struct
+    end
+
+    def marshal_load(struct)
+      @term = struct.term
+      @r = struct.r
+      @data = struct.data
+      @mu = struct.mu
+      @sigma = struct.sigma
+      @c = struct.c
     end
 
     def next(x)
