@@ -1,5 +1,11 @@
 module Fluent
   class AnomalyDetectOutput < Output
+
+    # To support log_level option implemented by Fluentd v0.10.43
+    unless method_defined?(:log)
+      define_method("log") { $log }
+    end
+
     Fluent::Plugin.register_output('anomalydetect', self)
 
     require_relative 'change_finder'
