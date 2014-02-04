@@ -1,6 +1,11 @@
 # -*- coding: utf-8 -*-
 module Fluent
   class ChangeFinder
+    # To support log_level option implemented by Fluentd v0.10.43
+    unless method_defined?(:log)
+      define_method("log") { $log }
+    end
+
     require 'matrix'
     attr_reader :mu
 
@@ -23,10 +28,10 @@ module Fluent
       c = @sigma
       for j in 0..(@term - 1)
         if @data[len - 1 - j]
-          @c[j] = (1 - @r) * @c[j] + @r * (x - @mu) * (@data[len - 1 - j] - @mu) 
+          @c[j] = (1 - @r) * @c[j] + @r * (x - @mu) * (@data[len - 1 - j] - @mu)
         end
       end
-      
+
       cc = Matrix.zero(@term).to_a
       for j in 0..(@term - 1)
         for i in j..(@term - 1)
@@ -46,7 +51,7 @@ module Fluent
 
       p = prob(xt, @sigma, x)
       s = score(p)
-      $log.debug "change_finder:#{Thread.current.object_id} x:#{x} xt:#{xt} p:#{p} s:#{s} term:#{@term} r:#{@r} data:#{@data} mu:#{@mu} sigma:#{@sigma} c:#{@c}"
+      log.debug "change_finder:#{Thread.current.object_id} x:#{x} xt:#{xt} p:#{p} s:#{s} term:#{@term} r:#{@r} data:#{@data} mu:#{@mu} sigma:#{@sigma} c:#{@c}"
       s
     end
 
