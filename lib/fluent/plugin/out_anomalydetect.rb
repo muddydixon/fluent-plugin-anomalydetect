@@ -149,12 +149,12 @@ module Fluent
 
     def outliers(tag, target = nil)
       @outliers[tag] ||= {}
-      @outliers[tag][target] ||= ChangeFinder.new(@outlier_term, @outlier_discount)
+      @outliers[tag][target] ||= ChangeFinder.new(log, @outlier_term, @outlier_discount)
     end
 
     def scores(tag, target = nil)
       @scores[tag] ||= {}
-      @scores[tag][target] ||= ChangeFinder.new(@score_term, @score_discount)
+      @scores[tag][target] ||= ChangeFinder.new(log, @score_term, @score_discount)
     end
 
     def init_records(tags)
@@ -319,6 +319,7 @@ module Fluent
             @outliers     = stored[:outliers]
             @outlier_bufs = stored[:outlier_bufs]
             @scores       = stored[:scores]
+            @outiers.each {|outlier| outlier.log = log } # @log is not dumped, so have to set at here
           else
             log.warn "anomalydetect: configuration param was changed. ignore stored data"
           end
