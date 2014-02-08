@@ -1,4 +1,4 @@
-# Fluent::Plugin::Anomalydetect [![Build Status](https://travis-ci.org/muddydixon/fluent-plugin-anomalydetect.png?branch=master)](https://travis-ci.org/muddydixon/fluent-plugin-anomalydetect)
+# Fluent::Plugin::Anomalydetect, a plugin for [Fluentd](http://fluentd.org) [![Build Status](https://travis-ci.org/muddydixon/fluent-plugin-anomalydetect.png?branch=master)](https://travis-ci.org/muddydixon/fluent-plugin-anomalydetect)
 
 To detect anomaly for log stream, use this plugin.
 Then you can find changes in logs casually.
