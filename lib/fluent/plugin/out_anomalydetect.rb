@@ -319,7 +319,7 @@ module Fluent
             @outliers     = stored[:outliers]
             @outlier_bufs = stored[:outlier_bufs]
             @scores       = stored[:scores]
-            @outiers.each {|outlier| outlier.log = log } # @log is not dumped, so have to set at here
+            @outliers.each {|outlier| outlier.log = log } # @log is not dumped, so have to set at here
           else
             log.warn "anomalydetect: configuration param was changed. ignore stored data"
           end
