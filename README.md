@@ -168,7 +168,7 @@ If "trend" option was specified, plugin only ouput when the input data tends to 
 
 
 ## Theory
-"データマイニングによる異常検知" http://amzn.to/XHXNun
+[データマイニングによる異常検知](http://amzn.to/XHXNun)
 
 # ToDo
 
