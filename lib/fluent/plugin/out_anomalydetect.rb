@@ -319,13 +319,28 @@ module Fluent
             @outliers     = stored[:outliers]
             @outlier_bufs = stored[:outlier_bufs]
             @scores       = stored[:scores]
-            @outliers.each {|outlier| outlier.log = log } # @log is not dumped, so have to set at here
+            inject_log(@scores)
+            inject_log(@outliers)
           else
             log.warn "anomalydetect: configuration param was changed. ignore stored data"
           end
         end
       rescue => e
         log.warn "anomalydetect: Can't load store_file #{e}"
+      end
+    end
+
+    def inject_log(obj)
+      case obj
+      when Array
+        obj.map{|o| log_injection(o) }
+      when Hash
+        obj.inject({}) do |hash, (k, v)|
+          hash[k] = log_injection(v)
+          hash
+        end
+      else
+        obj.log = log if obj.respond_to?(:log)
       end
     end
 
