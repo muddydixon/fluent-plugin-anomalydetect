@@ -326,24 +326,28 @@ module Fluent
             @outlier_bufs = stored[:outlier_bufs]
             @scores       = stored[:scores]
 
-            # @log is not dumped, so have to set to @outliers and @scores at here
-            # nil key if @target not exists
-            log_proc = Proc.new do |stored_value|
-              if @targets
-                @targets.each {|target| stored_value[target].log = log }
-              else
-                stored_value[@target].log = log
-              end
-            end
-            @outliers.each_value {|outlier| log_proc.call(outlier) }
-            @scores.each_value {|score| log_proc.call(score) }
-
+            inject_log(@scores)
+            inject_log(@outliers)
           else
             log.warn "anomalydetect: configuration param was changed. ignore stored data"
           end
         end
       rescue => e
         log.warn "anomalydetect: Can't load store_file #{e}"
+      end
+    end
+
+    def inject_log(obj)
+      case obj
+      when Array
+        obj.map{|o| log_injection(o) }
+      when Hash
+        obj.inject({}) do |hash, (k, v)|
+          hash[k] = log_injection(v)
+          hash
+        end
+      else
+        obj.log = log if obj.respond_to?(:log)
       end
     end
 
