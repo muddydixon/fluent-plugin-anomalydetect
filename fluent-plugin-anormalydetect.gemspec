@@ -9,6 +9,7 @@ Gem::Specification.new do |gem|
   gem.description   = %q{detect anomal sequential input casually}
   gem.summary       = %q{detect anomal sequential input casually}
   gem.homepage    = "https://github.com/muddydixon/fluent-plugin-anomalydetect"
+  gem.license       = "Apache-2.0"
 
 
   gem.files         = `git ls-files`.split($/)
