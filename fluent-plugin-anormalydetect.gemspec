@@ -20,5 +20,6 @@ Gem::Specification.new do |gem|
   gem.add_development_dependency "pry"
   gem.add_development_dependency "pry-nav"
   gem.add_development_dependency "octorelease"
+  gem.add_development_dependency "test-unit", "> 3.0"
   gem.add_runtime_dependency "fluentd"
 end
