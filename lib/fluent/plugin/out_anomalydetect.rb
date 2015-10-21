@@ -8,6 +8,11 @@ module Fluent
 
     Fluent::Plugin.register_output('anomalydetect', self)
 
+    # Define `router` method to support v0.10.57 or earlier
+    unless method_defined?(:router)
+      define_method("router") { Fluent::Engine }
+    end
+
     require_relative 'change_finder'
     require 'pathname'
 
@@ -212,7 +217,7 @@ module Fluent
       outputs = flush
       outputs.each do |tag, output|
         emit_tag = @tag_proc.call(tag)
-        Fluent::Engine.emit(emit_tag, Fluent::Engine.now, output) if output and !output.empty?
+        router.emit(emit_tag, Fluent::Engine.now, output) if output and !output.empty?
       end
     end
 
