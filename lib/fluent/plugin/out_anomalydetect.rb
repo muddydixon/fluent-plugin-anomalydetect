@@ -324,7 +324,18 @@ module Fluent
             @outliers     = stored[:outliers]
             @outlier_bufs = stored[:outlier_bufs]
             @scores       = stored[:scores]
-            @outliers.each {|outlier| outlier.log = log } # @log is not dumped, so have to set at here
+
+            # @log is not dumped, so have to set to @outliers and @scores at here
+            log_proc = Proc.new do |stored_value|
+              if @targets
+                @targets.each {|target| stored_value[target].log = log }
+              elsif @target
+                stored_value[@target].log = log
+              end
+            end
+            @outliers.each_value {|outlier| log_proc.call(outlier) }
+            @scores.each_value {|score| log_proc.call(score) }
+
           else
             log.warn "anomalydetect: configuration param was changed. ignore stored data"
           end
