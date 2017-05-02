@@ -85,6 +85,7 @@ module Fluent
         raise Fluent::ConfigError, "anomalydetect: aggregate allows tag/all"
       end
 
+      @tag_prefix = @tag_prefix_match = nil
       @tag_prefix = "#{@add_tag_prefix}." if @add_tag_prefix
       @tag_prefix_match = "#{@remove_tag_prefix}." if @remove_tag_prefix
       @tag_proc =
