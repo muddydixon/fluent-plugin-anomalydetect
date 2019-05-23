@@ -327,10 +327,11 @@ module Fluent
             @scores       = stored[:scores]
 
             # @log is not dumped, so have to set to @outliers and @scores at here
+            # nil key if @target not exists
             log_proc = Proc.new do |stored_value|
               if @targets
                 @targets.each {|target| stored_value[target].log = log }
-              elsif @target
+              else
                 stored_value[@target].log = log
               end
             end
