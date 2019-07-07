@@ -56,7 +56,13 @@ module Fluent
           cc[j][i] = cc[i][j] = @c[i - j]
         end
       end
-      w = (Matrix.rows(cc).inv * Vector.elements(@c)).to_a
+      
+      if Matrix.rows(cc).regular?
+        w = (Matrix.rows(cc).inv * Vector.elements(@c)).to_a
+      else
+        w = (Matrix.rows(cc) * Vector.elements(@c)).to_a
+      end
+      
       xt = @data.each.with_index.inject(@mu) do |sum, (v, idx)|
         sum += w[idx] * (v - @mu)
       end
